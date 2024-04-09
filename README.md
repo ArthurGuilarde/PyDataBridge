@@ -1,81 +1,71 @@
-# DataBaseEngine
+# Gerenciador de Banco de Dados para MySQL e PostgreSQL
 
-O é uma solução flexível em Python projetada para facilitar a conexão e operações com bancos de dados MySQL e PostgreSQL. Este repositório oferece duas abordagens distintas: uma orientada a objetos, ideal para aplicações complexas e integração profunda, e uma abordagem funcional, perfeita para scripts rápidos e tarefas de manipulação de dados pontuais.
+Este módulo fornece uma interface simplificada para a gestão de conexões com bancos de dados MySQL e PostgreSQL, facilitando a realização de operações de CRUD (Create, Read, Update, Delete), além de permitir testes de conexão e o fechamento seguro das conexões.
 
-### Características
+## Características
 
-- Abordagem Orientada a Objetos: Encapsula a lógica de conexão e operações de banco de dados em uma classe, facilitando a gestão de estados e a reutilização.
-- Abordagem Funcional: Fornece funções modulares para operações específicas de banco de dados, oferecendo simplicidade e flexibilidade.
-- Suporte para MySQL e PostgreSQL.
-- Integração fácil com pandas para operações de inserção em lote a partir de DataFrames.
-- Configuração dinâmica baseada em variáveis de ambiente para diferentes ambientes (desenvolvimento, homologação, produção).
+- Conexão simplificada com MySQL e PostgreSQL.
+- Geração dinâmica de strings SQL para operações de inserção e "upsert".
+- Teste de conexão para validar configurações.
+- Encerramento seguro de conexões com o banco de dados.
+- Suporte para variáveis de ambiente para configuração segura.
 
-### Requisitos
+## Dependências
 
-- pymysql
-- psycopg2
-- pandas
-- airflow (opcional, para a abordagem orientada a objetos)
+Este módulo depende de várias bibliotecas externas para funcionar corretamente. Certifique-se de ter as seguintes dependências instaladas:
 
-### Instalação
+- `os`
+- `logging`
+- `hashlib`
+- `pymysql`
+- `psycopg2`
+- `pandas`
+- `datetime`
+- `tqdm`
+- `python-dotenv`
+
+Você pode instalar todas as dependências necessárias com o seguinte comando:
 
 ```bash
-pip install pymysql psycopg2 tqdm pandas apache-airflow
+pip install pymysql psycopg2 pandas tqdm python-dotenv
 ```
 
-### Uso
+## Configuração
 
-Abordagem Orientada a Objetos (DataBaseEngine.py)
+Para utilizar o GerenciadorBancoDados, você precisa configurar as variáveis de ambiente relacionadas à conexão com o banco de dados. Um exemplo de configuração pode ser encontrado no arquivo .env.example neste repositório. Copie este arquivo para um arquivo .env e preencha com os seus dados de conexão.
+<br><br>
+Exemplo de .env:
+
+```.env
+DATABASE_URL=seu_host_do_banco
+DATABASE_USER=seu_usuario
+DATABASE_PASS=sua_senha
+```
+
+## Uso
+
+Aqui está um exemplo rápido de como utilizar o GerenciadorBancoDados para conectar a um banco de dados MySQL, testar a conexão e encerrar a conexão:
 
 ```python
-from database_engine import DataBaseEngine
-import pandas as pd
+from gerenciador_banco_dados import GerenciadorBancoDados
 
-df = pd.DataFrame({'coluna1': [1, 2], 'coluna2': ['A', 'B']})
+# Inicializa o gerenciador para um banco de dados específico e tabela
+gerenciador = GerenciadorBancoDados(database="nome_do_banco", table="nome_da_tabela", bd_type='mysql')
 
-engine = DataBaseEngine(bd_type='mysql', database='nome_do_banco', environment='dev', schema='public')
-engine.connection()
-engine.batch_insert(df)
-engine.dispose()
+# Testa a conexão
+gerenciador.conection_test()
+
+# Conecta ao banco de dados
+gerenciador.connect()
+
+# Encerra a conexão
+gerenciador.dispose()
 ```
 
-Abordagem Funcional (DataBaseEngine_script.py)
+## Contribuindo
 
-```python
-import pandas as pd
-from seu_modulo import batch_insert  # Substitua 'seu_modulo' pelo nome do arquivo
+Contribuições para o módulo são bem-vindas. Para contribuir, por favor, abra uma issue ou um pull request com suas sugestões ou correções.
 
-db_config = {
-    "host": "host_do_banco",
-    "user": "user_do_banco",
-    "password": "senha_do_banco",
-    "database": "nome_do_banco"
-}
+## Licença
 
-df = pd.DataFrame({'coluna1': [1, 2], 'coluna2': ['A', 'B']})
-
-batch_insert(df, pymysql, 'mysql', db_config, 'sua_tabela')
-```
-
-Métodos e Funções
-
-- Orientada a Objetos:
-
-  - connection()
-  - dispose()
-  - batch_insert(df, batch=0)
-
-- Funcional:
-  - create_conn(module, db_config)
-  - sql_for_insert(cur, table, bd_type)
-  - batch_insert(df, module, bd_type, db_config, table, schema='public')
-
-Licença
-
-MIT License - Veja o arquivo LICENSE para mais detalhes.
-
-Autor
-
-- Arthur Nemi Guilarde
-
----
+Este projeto é distribuído sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
