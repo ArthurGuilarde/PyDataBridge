@@ -82,7 +82,7 @@ class GerenciadorBancoDados:
         self.cur = None
         self.col_names = None
         
-        self.table = table
+        self.__table = table
         self.schema = schema
         self.database = database
         self.bd_type = bd_type
@@ -95,6 +95,21 @@ class GerenciadorBancoDados:
             "password": self.__password 
         }
     
+    @property
+    def table(self):
+        return self.__table
+    
+    @table.setter
+    def table(self, table_name):
+        
+        if not isinstance(table_name, str) or len(table_name) == 0:
+            raise ValueError("Nome da tabela deve ser uma string não vazia.")
+        
+        old_name = self.__table
+        self.__table = table_name
+        logging.info(f'Table name change from {old_name} -> {self.table}')
+        self.__get_col_names()
+        
     def __create_conn(self):      
         # Cria e estabelece a conexão com o banco de dados baseado nas configurações fornecidas.
         self.conn = self.module.connect(**self.__db_config)
@@ -125,7 +140,7 @@ class GerenciadorBancoDados:
 
         self.col_names = col_names
         
-        logging.info(f'Colunas selecionadas em {self.table} | {col_names}')  
+        logging.info(f'Colunas selecionadas em {self.table} | {self.col_names}')  
                 
     def conection_test(self):
         # Testa a conexão com o banco de dados e registra o resultado.
@@ -156,7 +171,7 @@ class GerenciadorBancoDados:
         try:
             self.cur.close()
             self.conn.close()
-            logging.info('Connection closed')
+            logging.info('Connection closed \n\n')
         except Exception as e:
             print(e)
             logging.error(f'Connection close failed {e}')
@@ -280,3 +295,11 @@ class GerenciadorBancoDados:
             sql = f"INSERT INTO {self.table} ({col_names}) VALUES ({placeholders}) ON CONFLICT ({key_col}) DO UPDATE SET {update_stmt}"
         
         return sql
+    
+meu_obj = GerenciadorBancoDados('credito', 'f_contratos_temp')
+
+meu_obj.connect()
+sql_insert = meu_obj.insert_sql()
+sql_upsert = meu_obj.upsert_sql()
+meu_obj.table = "f_contratos"
+meu_obj.dispose()
