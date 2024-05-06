@@ -23,6 +23,7 @@ import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
 from dotenv import load_dotenv
+from sshtunnel import SSHTunnelForwarder
 
 # Configuraçao inicial de logging
 HOJE = datetime.now()
@@ -56,7 +57,7 @@ class GerenciadorBancoDados:
         connect(): Configura e estabelece a conexao com o banco de dados.
         dispose(): Encerra a conexao com o banco de dados de forma segura.
     """
-    def __init__(self, database, table, bd_type='mysql', schema='public'):       
+    def __init__(self, database, table, bd_type='mysql', schema='public', ssh_tunneling=False):       
         """
         Inicializador da classe GerenciadorBancoDados.
         
@@ -70,7 +71,8 @@ class GerenciadorBancoDados:
         self.user = os.getenv("DATABASE_USER")
         self.__password = os.getenv("DATABASE_PASS")      
 
-        if bd_type not in ('mysql', 'postgresql'):
+
+        if bd_type not in ('mysql', 'postgres'):
             logging.error(f'bd_type={bd_type} | Tipo nao suportado.')
             raise TypeError(f'bd_type={bd_type} | Tipo nao suportado.')
 
@@ -96,6 +98,20 @@ class GerenciadorBancoDados:
         self.database = database
         self.bd_type = bd_type
         
+        
+        self.__ssh_server = None
+        self.ssh_server_con = None
+        
+        if ssh_tunneling:
+            self.__ssh_server = SSHTunnelForwarder(
+                (os.getenv("SSH_HOST"), 22),  # Endereço do servidor SSH e porta
+                ssh_username=os.getenv("SSH_USER"),
+                ssh_password=os.getenv("SSH_PASS"),
+                remote_bind_address=('localhost', self.port)  # Endereço do servidor PostgreSQL e porta
+            )   
+            
+            self.__create_ssh_con()         
+                 
         self.__db_config = {
             "host": self.host,
             "user": self.user,
@@ -103,7 +119,7 @@ class GerenciadorBancoDados:
             "database": self.database,
             "password": self.__password 
         }
-    
+        
     @property
     def table(self):
         return self.__table
@@ -123,6 +139,13 @@ class GerenciadorBancoDados:
         # Cria e estabelece a conexao com o banco de dados baseado nas configurações fornecidas.
         self.conn = self.module.connect(**self.__db_config)
         self.cur = self.conn.cursor()
+        
+    def __create_ssh_con(self):      
+        self.__ssh_server.start()
+        self.port = self.__ssh_server.local_bind_port
+    
+    def __dispose_ssh_con(self):      
+        self.__ssh_server.stop()
         
     def __get_col_names (self):
         if self.bd_type in ('mysql', 'postgres'):
@@ -152,6 +175,9 @@ class GerenciadorBancoDados:
             if (self.conn != None) and (self.cur != None):
                 logging.warning('Test Connection | Connection already established')
             else:
+                if self.__ssh_server:
+                    self.__create_ssh_con()
+                    
                 self.__create_conn()
                 logging.info('Test Connection | Connection configured successfully')
                 self.dispose()
@@ -162,6 +188,9 @@ class GerenciadorBancoDados:
     def connect(self):
         # Estabelece a conexao com o banco de dados se nao estiver previamente conectado.
         try:
+            if self.__ssh_server:
+                self.__create_ssh_con()
+                
             self.__create_conn()
             logging.info('Connection configured successfully')
             self.__get_col_names()
@@ -174,6 +203,9 @@ class GerenciadorBancoDados:
         try:
             self.cur.close()
             self.conn.close()
+            
+            if self.__ssh_server:
+                self.__dispose_ssh_con()
             logging.info('Connection closed \n\n')
         except Exception as e:
             print(e)
@@ -346,3 +378,15 @@ class GerenciadorBancoDados:
         except Exception as e:
             print(e)
             logging.error(f'Erro em get_primary_key | {e}')
+
+    def batch_insert(self, df, sql):
+        if self.bd_type == 'postgres':
+            self.cur.execute(f"SET search_path TO {self.schema}")
+        
+        chunksize = min(len(df), 1000) # Processa em lotes de 1000
+        
+        with tqdm(total=len(df)) as pbar:
+            for i in range(0, len(df), chunksize):  
+                tuples = [tuple(x) for x in df.iloc[i:i + chunksize].itertuples(index=False)]
+                self.cur.executemany(sql, tuples)
+                pbar.update(len(tuples))
