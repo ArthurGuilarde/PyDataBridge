@@ -379,16 +379,24 @@ class GerenciadorBancoDados:
             df (pd.DataFrame): DataFrame contendo os dados a serem inseridos.
             sql (str): Comando SQL de inserção.
         """
-        if self.bd_type == 'postgres':
-            self.cur.execute(f"SET search_path TO {self.schema}")
-        
-        chunksize = min(len(df), 1000)  # Processa em lotes de 1000
-        
-        with tqdm(total=len(df)) as pbar:
-            for i in range(0, len(df), chunksize):
-                tuples = [tuple(x) for x in df.iloc[i:i + chunksize].itertuples(index=False)]
-                self.cur.executemany(sql, tuples)
-                pbar.update(len(tuples))
+        try:
+            if self.bd_type == 'postgres':
+                self.cur.execute(f"SET search_path TO {self.schema}")
+            
+            chunksize = min(len(df), 1000)  # Processa em lotes de 1000
+            logging.info(f'Iniciando inserção em lotes. Tamanho do lote: {chunksize}')
+            
+            with tqdm(total=len(df)) as pbar:
+                for i in range(0, len(df), chunksize):
+                    tuples = [tuple(x) for x in df.iloc[i:i + chunksize].itertuples(index=False)]
+                    self.cur.executemany(sql, tuples)
+                    pbar.update(len(tuples))
+            
+            logging.info('Inserção em lotes concluída com sucesso')
+            
+        except Exception as e:
+            logging.error(f'Erro durante a inserção em lotes | {e}')
+            raise Exception(f'Erro durante a inserção em lotes | {e}')
                 
     def carga_dimensao(self, df_dimensao, col_dimensao, pk):
         """
