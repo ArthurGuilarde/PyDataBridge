@@ -384,7 +384,7 @@ class GerenciadorBancoDados:
                 self.cur.execute(f"SET search_path TO {self.schema}")
             
             chunksize = min(len(df), 1000)  # Processa em lotes de 1000
-            logging.info(f'Iniciando inserção em lotes. Tamanho do lote: {chunksize}')
+            logging.info(f'Iniciando insert em lotes. Tamanho do lote: {chunksize}')
             
             with tqdm(total=len(df)) as pbar:
                 for i in range(0, len(df), chunksize):
@@ -392,37 +392,39 @@ class GerenciadorBancoDados:
                     self.cur.executemany(sql, tuples)
                     pbar.update(len(tuples))
             
-            logging.info('Inserção em lotes concluída com sucesso')
+            logging.info('Insert em lotes concluido com sucesso')
             
         except Exception as e:
-            logging.error(f'Erro durante a inserção em lotes | {e}')
-            raise Exception(f'Erro durante a inserção em lotes | {e}')
+            print(e)
+            logging.error(f'Erro durante Insert em lotes | {e}')
+            raise Exception(f'Erro durante Insert em lotes | {e}')
                 
-    def carga_dimensao(self, df_dimensao, col_dimensao, pk):
+    def carga_dimensao(self, df, col_dimensao, pk):
         """
         Realiza a carga de dados dimensionais na tabela atual, removendo registros antigos e inserindo novos registros.
         
         Args:
-            df_dimensao (pd.DataFrame): DataFrame contendo os dados dimensionais.
+            df (pd.DataFrame): DataFrame contendo os dados dimensionais.
             col_dimensao (list): Lista de colunas dimensionais.
             pk (str): Nome da coluna da chave primária.
         """
         aux = len(col_dimensao) + 2
         
-        df_dimensao_dw = self.select_hash(col_dimensao, pk, df_dimensao['dhash'].values)
-        df_dimensao_dw['dt_movimento'] = pd.to_datetime(df_dimensao_dw['dt_movimento'])
+        df_dw = self.select_hash(col_dimensao, pk, df['dhash'].values)
+        df_dw['dt_movimento'] = pd.to_datetime(df_dw['dt_movimento'])
         
-        data_atual = pd.to_datetime(df_dimensao['Data Movimento'].iloc[0])
-        df_dimensao_dw['diferenca_dias'] = (data_atual - df_dimensao_dw['dt_movimento']).dt.days
+        data_atual = pd.to_datetime(df['Data Movimento'].iloc[0])
+        df_dw['diferenca_dias'] = (data_atual - df_dw['dt_movimento']).dt.days
         
-        df_registros_antigos = df_dimensao_dw[df_dimensao_dw['diferenca_dias'] >= 30]
+        df_registros_antigos = df_dw[df_dw['diferenca_dias'] >= 30]
         
         if len(df_registros_antigos) > 0:
+            df_registros_antigos = df[df['dhash'].isin(df_registros_antigos[pk])]
             sql = self.upsert_sql()
             self.batch_insert(df_registros_antigos, sql)
             self.conn.commit()
         
-        df = pd.merge(df_dimensao, df_dimensao_dw, how='left', left_on='dhash', right_on=pk, indicator=True).loc[lambda x: x['_merge'] == 'left_only']
+        df = pd.merge(df, df_dw, how='left', left_on='dhash', right_on=pk, indicator=True).loc[lambda x: x['_merge'] == 'left_only']
         df = df.iloc[:, :-aux]
         
         if len(df) > 0:
@@ -443,7 +445,7 @@ class GerenciadorBancoDados:
         aux = len(col_list) + 1
         df_dw = self.select_hash(col_list, pk, df[hash].values, ultimo_registro=True)
 
-        df_desatualizados = pd.merge(df.iloc[4:], df_dw, how='right', left_on=hash, right_on=pk, indicator=True).loc[lambda x: x['_merge'] == 'right_only']
+        df_desatualizados = pd.merge(df, df_dw, how='right', left_on=hash, right_on=pk, indicator=True).loc[lambda x: x['_merge'] == 'right_only']
         df_desatualizados = df_desatualizados.iloc[:, -aux:-1]
         
         if len(df_desatualizados) > 0:
@@ -464,5 +466,5 @@ class GerenciadorBancoDados:
         
         if len(df_novos_registros) > 0:
             sql = self.insert_sql()
-            self.batch_insert(df, sql)
+            self.batch_insert(df_novos_registros, sql)
             self.conn.commit()
